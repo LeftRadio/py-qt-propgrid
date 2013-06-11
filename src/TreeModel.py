@@ -1,10 +1,10 @@
-from PyQt4.QtCore import *
 import sys
 import PyQt4.QtGui
-
+from PyQt4.QtCore import *
 from PyQt4.QtGui import (QStyledItemDelegate,  QItemDelegate, QLineEdit)
 #TODO Make this work so that a child can belong to many parents....
 from PyQt4.QtGui import *
+
 class ObjectStringBox( QTextEdit):
     def __init__(self, parent=None):
         super(QTextEdit, self).__init__(parent)
