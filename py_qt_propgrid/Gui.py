@@ -1,11 +1,17 @@
 
     
 from Ui_editor import Ui_Dialog
-from PyQt4.QtCore import Qt, SIGNAL, QObject, QString
+from PyQt4.QtCore import Qt, SIGNAL, QObject
 import PyQt4.QtGui as QtGui
 from PyQt4.QtGui import *
 from PyQt4.QtCore import *
 
+try:  
+    from PyQt4.QtCore import QString  
+except ImportError:  
+    # we are using Python3 so QString is not defined  
+    QString = str  
+    
 from Items import loadItems, JsonToObject
 from TreeModel import Config_Base
 try:

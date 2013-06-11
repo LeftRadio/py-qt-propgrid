@@ -360,21 +360,21 @@ class Config_Base(QObject):
         elif role == Qt.ToolTipRole:
             pass
         else:
-            return QVariant()
+            return None
         if column >= len(self.columns):
-            return QVariant()
+            return None
         if role == Qt.DisplayRole:
 
             if self.columns[column].value == None:
-                return QVariant()
-            return QVariant(str(self.columns[column].value))
+                return None
+            return str(self.columns[column].value)
         elif (role == Qt.CheckStateRole) and (self.columns[column].checkable == True):
-            return QVariant(self.columns[column].checkstate)
+            return self.columns[column].checkstate
         elif role == Qt.ToolTipRole and not self.columns[column].tooltip == '':
-            return QVariant(self.columns[column].tooltip)
+            return self.columns[column].tooltip
         else:
-            return QVariant()
-        return QVariant()
+            return None
+        return None
         
     def rowCount(self):
         """rowCount(self, parent)
@@ -428,7 +428,7 @@ class TreeCheckboxColumn(TreeColumn):
             self.value = 0
         self.flags |= Qt.ItemIsEditable
     def setModelData(self, editor, model, index):
-        #model.setData(index, QVariant(editor.value()))
+        #model.setData(index, editor.value())
         value = editor.checkState()
         self.value = value
         self.obj.set_value(value)
@@ -457,7 +457,7 @@ class TreeStringColumn(TreeColumn):
         self.value = str(value)
         self.flags |= Qt.ItemIsEditable
     def setModelData(self, editor, model, index):
-        #model.setData(index, QVariant(editor.value()))
+        #model.setData(index, editor.value())
         value = str(editor.text())
         self.value = value
         self.obj.set_value(value)
@@ -479,7 +479,7 @@ class TreeStringListColumn(TreeColumn):
         self.value = value
         self.flags |= Qt.ItemIsEditable
     def setModelData(self, editor, model, index):
-        #model.setData(index, QVariant(editor.value()))
+        #model.setData(index, editor.value())
         options = str(editor.text()).split(',')
         value = options
         self.value = value
@@ -511,7 +511,7 @@ class TreeSpinBoxColumn(TreeColumn):
 
         self.flags |= Qt.ItemIsEditable
     def setModelData(self, editor, model, index):
-        #model.setData(index, QVariant(editor.value()))
+        #model.setData(index, editor.value())
         value = editor.value()
         self.value = value
         self.obj.set_value(value)
@@ -550,7 +550,7 @@ class TreeSpinBoxDoubleColumn(TreeColumn):
         self.decimals = sys.float_info.max_10_exp + 15
         self.flags |= Qt.ItemIsEditable
     def setModelData(self, editor, model, index):
-        #model.setData(index, QVariant(editor.value()))
+        #model.setData(index, editor.value())
         value = editor.value()
         self.value = value
         self.obj.set_value(value)
@@ -706,7 +706,7 @@ class TreeDirectoryPickerColumn(TreeColumn):
         self.obj.set_value(self.value)
     def setEditorData(self, editor, index):
         editor.set_files(self.value)
-        #i = editor.findData(QVariant(self.value))
+        #i = editor.findData(self.value)
         #editor.setCurrentIndex(i)
     def setData(self, data, value):
         self.value = str(value)
@@ -731,7 +731,7 @@ class TreeFilePickerColumn(TreeColumn):
     def setEditorData(self, editor, index):
         editor.set_files(self.value)
         editor.line_edit.setFocus()
-        #i = editor.findData(QVariant(self.value))
+        #i = editor.findData(self.value)
         #editor.setCurrentIndex(i)
     def setData(self, data, value):
             self.value = value
@@ -851,11 +851,11 @@ class TreeModel(QAbstractItemModel):
         return Qt.MoveAction
     def headerData(self, section, orientation, role):
         if role != Qt.DisplayRole:
-            return QVariant()
+            return None
         if orientation != Qt.Horizontal:
-            return QVariant()
+            return None
         items = ['Parameter', 'Value']
-        return QVariant(items[section])
+        return items[section]
     def clear(self):
         self.beginResetModel()
         self.top = Config_Base(None)
@@ -1108,14 +1108,14 @@ class TreeModel(QAbstractItemModel):
         item = index.internalPointer()
         
         if item == None:
-            return QVariant()
+            return None
         
         if not index.isValid():
-            return QVariant()
+            return None
         
         row = index.row()
         if not 0 <= row < self.rowCount(index.parent()):
-            return QVariant()
+            return None
 
         column = index.column()
         
@@ -1227,11 +1227,11 @@ class TreeModel(QAbstractItemModel):
             #Because the states are integers we can just sum up all of the states and see if they are equal to the checked state.
             
             if count == len(item.children)*(Qt.Checked):
-                self.setData(parent, QVariant( Qt.Checked), role)
+                self.setData(parent,  Qt.Checked, role)
             elif count == len(item.children)*Qt.Unchecked:
-                self.setData(parent, QVariant(Qt.Unchecked), role)
+                self.setData(parent, Qt.Unchecked, role)
             else:
-                self.setData(parent, QVariant(Qt.PartiallyChecked), role)
+                self.setData(parent, Qt.PartiallyChecked, role)
             
             return True
     def flags(self, index):
