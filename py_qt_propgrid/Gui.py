@@ -1,19 +1,19 @@
 
     
 from Ui_editor import Ui_Dialog
-from PyQt4.QtCore import Qt, SIGNAL, QObject
-import PyQt4.QtGui as QtGui
-from PyQt4.QtGui import *
-from PyQt4.QtCore import *
+from python_qt_binding.QtCore import Qt, SIGNAL, QObject
+import python_qt_binding.QtGui as QtGui
+from python_qt_binding.QtGui import *
+from python_qt_binding.QtCore import *
 
 try:  
-    from PyQt4.QtCore import QString  
+    from python_qt_binding.QtCore import QString  
 except ImportError:  
     # we are using Python3 so QString is not defined  
     QString = str  
     
 from Items import loadItems, JsonToObject
-from TreeModel import Config_Base
+from TreeModel import Config_Base,Config_Group
 try:
     _fromUtf8 = QString.fromUtf8
 except AttributeError:
@@ -65,7 +65,7 @@ class Dialog_Editor(QDialog, Ui_Dialog):
         return result
     def SetData(self, data):
         self.obj = data
-        self.data = data.json
+        #self.data = data.json
         skips = ( 'gui_type', 'members', 'value')
         index = self.types.index(data.json['gui_type'])
         self.cb_guitype.setCurrentIndex(index)
@@ -115,7 +115,7 @@ class Dialog_Editor(QDialog, Ui_Dialog):
         if p0 != self.data['gui_type']:
             self.type_changed.emit(p0)
 
-from PyQt4.QtGui   import QTreeView
+from python_qt_binding.QtGui   import QTreeView
 from TreeModel import ItemDelegate,  TreeModel
 
 class ConfigTreeModel(TreeModel):
@@ -123,8 +123,8 @@ class ConfigTreeModel(TreeModel):
     These functions are used in all read-only models, and form the basis of editable models."""
     def __init__(self, parent = None):
         TreeModel.__init__(self, parent)
-        self.top = Config_Base(None)
-        self.top.updateJSON({'name':'top'})
+        self.top = Config_Base(parent=None,name='top')
+
         self.config_data = None
         self.supported_types = loadItems()
         
@@ -140,7 +140,7 @@ class ConfigTreeModel(TreeModel):
             parent = self.top
             #parent.children = objects.children
             
-        for obj in objects.children:
+        for obj in objects:
             index = self.addConfigItem(obj, parent)
             #self.setConfigData(obj, index)
         
@@ -188,10 +188,11 @@ class ConfigTreeModel(TreeModel):
         config = []
         if(parent == None):
             parent = self.top
-
+        #TODO What is this??
         for item in parent.children:
             #TODO This needs to be done a different way  A group could have a value, and children
-            if(item.json['gui_type']== 'Group'): 
+            if(isinstance(item,Config_Group)):
+                item.children = self.getConfigArray(item)
                 item.json['members'] = self.getConfigArray(item)
             """
             elif(len(item.columns) <= 1):
@@ -411,7 +412,6 @@ class ConfigGridTreeView(QTreeView):
         self.menuAddItem.setTitle(QtGui.QApplication.translate("Right CLick", "Add Item..", None, QApplication.UnicodeUTF8))
         self.menuAddItem.setObjectName(_fromUtf8("menuAddItem"))
         
-        types = loadItems()
         
         #Set up drag and drop stuff...
         self.dragEnabled() 
@@ -419,41 +419,36 @@ class ConfigGridTreeView(QTreeView):
         self.showDropIndicator() 
         self.setDragDropMode(QAbstractItemView.InternalMove) 
         
-        for type, val in types.items():
-            name = val().json['gui_type']
-            
-            act = QtGui.QAction(self)
-            act.my_type = val
-            act.setText(QtGui.QApplication.translate("MainWindow", name, None, QtGui.QApplication.UnicodeUTF8))
-            act.setObjectName(_fromUtf8("actionConvertTo" + name))
-            act.triggered.connect(self.convert_to)
-            self.menuConvertTo.addAction(act)
-
-        self.type_names = []
-        self.type_definitions = {}
-        for type, val in types.items():
-            name = val().json['gui_type']
-            
-            self.type_names.append(name)
-            self.type_definitions[name] = val
-            act = QtGui.QAction(self)
-            act.my_type = type
-            act.setText(QtGui.QApplication.translate("MainWindow", name, None, QtGui.QApplication.UnicodeUTF8))
-            act.setObjectName(_fromUtf8("actionAddItem" + name))
-            act.triggered.connect(self.add_param)
-            self.menuAddItem.addAction(act)
+        #TODO add convert to / add item types
+        #        types = loadItems()
+#        for type, val in types.items():
+#            name = val().json['gui_type']
+#            
+#            act = QtGui.QAction(self)
+#            act.my_type = val
+#            act.setText(QtGui.QApplication.translate("MainWindow", name, None, QtGui.QApplication.UnicodeUTF8))
+#            act.setObjectName(_fromUtf8("actionConvertTo" + name))
+#            act.triggered.connect(self.convert_to)
+#            self.menuConvertTo.addAction(act)
+#
+#        self.type_names = []
+#        self.type_definitions = {}
+#        for type, val in types.items():
+#            name = val().json['gui_type']
+#            
+#            self.type_names.append(name)
+#            self.type_definitions[name] = val
+#            act = QtGui.QAction(self)
+#            act.my_type = type
+#            act.setText(QtGui.QApplication.translate("MainWindow", name, None, QtGui.QApplication.UnicodeUTF8))
+#            act.setObjectName(_fromUtf8("actionAddItem" + name))
+#            act.triggered.connect(self.add_param)
+#            self.menuAddItem.addAction(act)
             
         self.actionDelete_Item = QtGui.QAction(self)
         self.actionDelete_Item.setText('Delete Item')
         self.actionDelete_Item.triggered.connect(self.delete_item)
                 
-                
-        self.editor = Dialog_Editor(self)
-        self.editor.changed.connect(self.editor_changed)
-        self.editor.type_changed.connect(self.editor_convert_to)
-        self.editor.set_types(self.ConfigHeader.supported_types)
-        self.editor.supported_types = loadItems()
-
         self.actionEdit_Item = QtGui.QAction(self)
         self.actionEdit_Item.setText('Edit Item')
         self.actionEdit_Item.triggered.connect(self.edit_item)
@@ -479,8 +474,8 @@ class ConfigGridTreeView(QTreeView):
         """
         # TODO: not implemented yet
         parent = self.selected_index.parent()
-        item = self.selected_index.internalPointer()
-        row = self.selected_index.row()
+        item   = self.selected_index.internalPointer()
+        row    = self.selected_index.row()
         count = 0
         if (item.json['gui_type'] == 'Group' and len(item.children) > 0):
 
@@ -544,7 +539,7 @@ class ConfigGridTreeView(QTreeView):
         if index == self.selected_index:
             return
         self.selected_index = index
-        self.editor.SetData(index.internalPointer())
+
         self.emit(SIGNAL('argument_selected'), index)
         
 
@@ -587,7 +582,6 @@ class ConfigGridTreeView(QTreeView):
         if len(index) > 0:
             index = index[0]
             self.selected_index = index
-            self.editor.SetData(self.selected_index.internalPointer() )
             #print self.selected_index
         else:
             index = None
@@ -620,10 +614,10 @@ class ConfigGridTreeView(QTreeView):
             for act in actions:
                 menu.addAction(act)    
             menu.exec_(QCursor.pos())
-    def set_command(self, command):
+    def setItems(self, command):
         #TODO delete objects.
-        self.command = command
-        self.ConfigHeader.setConfigData(self.command)
+        self.items = command
+        self.ConfigHeader.setConfigData(self.items)
         #TODO Setup a bunch of signal connections.
 
     def set_config(self, config, data=None):

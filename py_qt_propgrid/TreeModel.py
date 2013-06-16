@@ -1,9 +1,9 @@
 import sys
-import PyQt4.QtGui
-from PyQt4.QtCore import *
-from PyQt4.QtGui import (QStyledItemDelegate,  QItemDelegate, QLineEdit)
+import python_qt_binding.QtGui
+from python_qt_binding.QtCore import *
+from python_qt_binding.QtGui import (QStyledItemDelegate,  QItemDelegate, QLineEdit)
 #TODO Make this work so that a child can belong to many parents....
-from PyQt4.QtGui import *
+from python_qt_binding.QtGui import *
 
 class ObjectStringBox( QTextEdit):
     def __init__(self, parent=None):
@@ -156,10 +156,11 @@ class ItemDelegate(QStyledItemDelegate):
                 self.closeEditor.emit(editor, QStyledItemDelegate.NoHint);
             return result
         return self.orig_eventFilter(editor, event)
+    
 class TreeColumn(QObject):
     def __init__(self, value):
         QObject.__init__(self)
-        self.checkable = False
+
         self.checkstate = Qt.Unchecked
         self.value = value
         self.index = None
@@ -176,79 +177,128 @@ class TreeColumn(QObject):
         Qt.ItemIsEnabled	            32	The user can interact with the item.
         Qt.ItemIsTristate              64	The item is checkable with three separate states.
         """
-        self.flags = Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsUserCheckable
-        
+        self.flags = 0
+        self.enabled = True
+        self.selectable = True
+        self.checkable = False
+    @property
+    def enabled(self):
+        return (self.flags & Qt.ItemIsEnabled) == Qt.ItemIsEnabled
+    @enabled.setter
+    def enabled(self,value):
 
+        if self.enabled == value:
+            return
+        if(value == True):
+            self.flags |= Qt.ItemIsEnabled
+        else:
+
+            self.flags = self.flags & (~Qt.ItemIsEnabled)
+
+    @property
+    def selectable(self):
+        return (self.flags & Qt.ItemIsSelectable) == Qt.ItemIsSelectable
+    @selectable.setter
+    def selectable(self,value):
+        if self.selectable == value:
+            return
+        if(value == True):
+            self.flags |= Qt.ItemIsSelectable
+        else:
+            self.flags = self.flags & (~Qt.ItemIsSelectable)
+    @property
+    def checked(self):
+        return self.checkstate == Qt.Checked
+    @checked.setter
+    def checked(self,value):
+        if self.checked == value:
+            return
+        if value:
+            self.checkstate = Qt.Checked
+        else:
+            self.checkstate = Qt.Unchecked
+    @property
+    def checkable(self):
+        return (self.flags & Qt.ItemIsUserCheckable) == Qt.ItemIsUserCheckable
+    @checkable.setter
+    def checkable(self,value):
+
+        if self.checkable == value:
+            return
+
+        if(value == True):
+            self.flags |= Qt.ItemIsUserCheckable
+        else:
+            self.flags = self.flags & (~Qt.ItemIsUserCheckable)
+
+def list_dict_search(list,key):
+    for item in list:
+        if key in item:
+            return item[key]
+    return None
 class Config_Base(QObject):
     """Base Config Item."""
-    def __init__(self, parent=None):
+    def __init__(self,  *args, **kwargs):
         QObject.__init__(self)
-        self.json = {'gui_type':'Base', 'name':'base', 'tooltip':'', 'long':'','short':'','required':False, 'checked':False, 'value':''}
-        self.columns = [TreeColumn(self.json['name'])]
+
+        self.parent = list_dict_search(args,'parent')
+        name = list_dict_search(args, 'name')
+        if name == None:
+            name = 'base'
+        self.columns = [TreeColumn(name)]
+
         """        
         Qt.ItemIsDragEnabled	      4	It can be dragged.
         Qt.ItemIsDropEnabled	      8	It can be used as a drop target.
         """
         self.columns[0].flags |= Qt.ItemIsDragEnabled | Qt.ItemIsDropEnabled  
-        self.parent = parent
+
         self.children = []
         self.setup = False
         self.num_index = -1
-        #If parent exists then we add ourself to the parent
-        if(not parent == None):
-            self.parent.addChild(self)
-    def updateJSON(self, json):
 
-        for k, v in json.iteritems():
-            if v == None:
-                continue
-            self.json[k] = v
-            self.emit(SIGNAL(k + '_changed'))
-            if k == 'name':
-                self.columns[0].value = v
-                index = self.columns[0].index
-                if self.columns[0].index != None:                    
-                    index.model().dataChanged.emit(index, index)
-            if k == 'value':
-                if len(self.columns) > 1:
-                    self.columns[1].value = v
-        self.getTreeItem(self.parent)
-    def set_value(self, value):
-        if  self.json['value'] == value:
+        self._tooltip = ""
+        self.checked = False
+        self.checkable = False
+        #If parent exists then we add ourself to the parent
+        if(not self.parent == None):
+            self.parent.addChild(self)
+    @property
+    def name(self):
+        return self.columns[0].value
+    @name.setter
+    def name(self,name):
+        if name == self.name:
             return
-        self.json['value'] = value
+        self.columns[0].value = name
+        index = self.columns[0].index
+        if self.columns[0].index != None:                    
+            index.model().dataChanged.emit(index, index)
+    @property
+    def value(self):
+        if len(self.columns) > 1:
+            return self.columns[1].value
+        return None
+    @value.setter
+    def value(self, value):
+        if value == self.value:
+            return
         if len(self.columns) > 1:
             self.columns[1].value = value
+        else:
+            raise "Missing a column"
         self.emit(SIGNAL("value_changed"),)
-    def set_checked(self, value):
-        if self.json['checked'] == value:
+    @property
+    def checked(self):
+        return self.columns[0].checkstate == Qt.Checked
+    @checked.setter
+    def checked(self, value):
+        if self.checked == value:
             return
-        self.json['checked'] = value
         map = {True:Qt.Checked, False:Qt.Unchecked}
         self.columns[0].checkstate = map[value]
         self.emit(SIGNAL('checked_changed'))
-    def toCommandLine(self, format_key='long'):
-        #Sometimes there isn't 2 keys.
-        secondary_key = 'short'
-        if(format_key == 'short'):
-            secondary_key = 'long'
 
-        if(self.json[format_key] == ''):
-            format_key = secondary_key
-        return self.json[format_key].format(self.json['value'])
-    def getAnchorName(self):
-        name = self.json['name']
-        import string
-        name = string.replace(str(name),'-', '_')
-        name = "param_" + name
-        return name
-        
-    def toHtml(self):
-        html = """<div id="%s" class="param">
-        <h3>%s</h3>
-        <div  class="param_descrip">%s</div>
-        </div>""" % (self.getAnchorName(), self.json['name'], self.json['tooltip'])
-        return html
     def getTreeItem(self, parent):
         self.parent = parent
         #if self.setup:
@@ -259,19 +309,33 @@ class Config_Base(QObject):
         return self
     def setupTreeItem(self):
         return self
+    @property
+    def checkable(self):
+        return self.columns[0].checkable
+    @checkable.setter
+    def checkable(self,value):
+        if self.checkable == value:
+            return
+        self.columns[0].checkable = value
+        self.emit(SIGNAL('checkable_changed'))
+    @property
+    def checked(self):
+        return self.columns[0].checkstate == Qt.Checked
+    @checked.setter
+    def checked(self,value):
+        if self.checked == value:
+            return
+        
+        if value:
+            self.columns[0].checkstate = Qt.Checked
+        else:
+            self.columns[0].checkstate = Qt.Unchecked
+                 
     def finalizeTreeItem(self):
-        if self.json.has_key('tooltip'):
-            self.columns[0].tooltip = self.json['tooltip']
-        if not self.json['gui_type']== 'Group':
-            self.columns[0].checkable = True
-            self.columns[0].flags |= Qt.ItemIsUserCheckable
-        if self.json.has_key('checked'):
-            if self.json['checked']:
-                self.columns[0].checkstate = Qt.Checked
-            else:
-                self.columns[0].checkstate = Qt.Unchecked
-        if self.json.has_key('required'):
-            if self.json['required'] == True or self.json['required'] == 'True':
+        self.columns[0].tooltip = self._tooltip
+        if hasattr(self, 'required'):
+
+            if self.required == True:
                 self.columns[0].checkable = False
                 self.checkstate = Qt.Checked
         return self
@@ -282,7 +346,6 @@ class Config_Base(QObject):
             return QModelIndex()
         return self.parent
     def columnCount(self):
-        return 2
         return len(self.columns)
     def children(self):
         return self.children
@@ -364,7 +427,6 @@ class Config_Base(QObject):
         if column >= len(self.columns):
             return None
         if role == Qt.DisplayRole:
-
             if self.columns[column].value == None:
                 return None
             return str(self.columns[column].value)
@@ -391,8 +453,7 @@ class Config_Base(QObject):
             self.columns[column].checkstate = value
             
         if column == 0:
-            self.json['checked'] = value == Qt.Checked
-            self.emit(SIGNAL('checked_changed'))
+            self.checked = value == Qt.Checked
         
         #If its a tristate checkbox, then set its children to the paren'ts value
         if self.columns[column].flags & Qt.ItemIsTristate and value.toInt()[0] !=  Qt.PartiallyChecked: 
@@ -406,6 +467,37 @@ class Config_Base(QObject):
             currentSelected = item.getSelectedItems(currentSelected)
         return currentSelected
 
+class Config_Group(Config_Base):
+    def __init__(self,*args, **kwargs):
+        self._children = []
+        Config_Base.__init__(self,args,kwargs)
+
+    @property
+    def children(self):
+        return self._children
+    @children.setter
+    def children(self,value):
+        #Todo this needs done differently
+        for child in self._children:
+            child.parent = None
+        for child in value:
+            self.appendChild(child)
+    def appendChild(self,obj):
+        self.children.append(obj)
+        obj.parent = self
+
+    def setupTreeItem(self):
+        #Todo figure this out...
+        #for child_item in self.children:
+        #   #TODO Change this
+        #   gui_obj = child_item.getTreeItem(item)
+        col = TreeColumn(' ')
+        col.flags = Qt.ItemIsSelectable
+        col.value = ' '
+        self.columns.append(col)
+        
+        return self
+
 class TreeNoneColumn(TreeColumn):
     def __init__(self):
         TreeColumn.__init__(self, None)
@@ -417,7 +509,7 @@ class TreeNoneColumn(TreeColumn):
 class TreeCheckboxColumn(TreeColumn):
     def __init__(self, obj):
         self.obj = obj
-        value = self.obj.json['value']
+        value = self.obj.value
 
         TreeColumn.__init__(self, value)
         
@@ -445,35 +537,32 @@ class TreeCheckboxColumn(TreeColumn):
         #TODO Let it support 3e-5
         #TODO Don't show a bazillion zeros to obtain full precision, thats just silly.
         #TODO Do the same thing for integers.
-        checkbox =  PyQt4.QtGui .QCheckBox(parent)
+        checkbox =  python_qt_binding.QtGui .QCheckBox(parent)
         checkbox.setCheckState(self.value)
         self.editor = checkbox
         return checkbox
 class TreeStringColumn(TreeColumn):
     def __init__(self, obj):
         self.obj = obj
-        value = self.obj.json['value']
+        value = self.obj.value
         TreeColumn.__init__(self, value)
         self.value = str(value)
         self.flags |= Qt.ItemIsEditable
     def setModelData(self, editor, model, index):
         #model.setData(index, editor.value())
         value = str(editor.text())
-        self.value = value
-        self.obj.set_value(value)
+        self.obj.value = value
 
     def setEditorData(self, editor, index):
 
         editor.setText(self.value)
     def setData(self, data, value):
-        
-        self.value = value
-        self.obj.set_value(value)
+        self.obj.value = value
 
 class TreeStringListColumn(TreeColumn):
     def __init__(self, obj):
         self.obj = obj
-        value = self.obj.json['value']
+        value = self.obj.value
 
         TreeColumn.__init__(self, value)
         self.value = value
@@ -482,8 +571,7 @@ class TreeStringListColumn(TreeColumn):
         #model.setData(index, editor.value())
         options = str(editor.text()).split(',')
         value = options
-        self.value = value
-        self.obj.set_value(value)
+        self.obj.value
 
     def setEditorData(self, editor, index):
         txt = ''
@@ -492,14 +580,13 @@ class TreeStringListColumn(TreeColumn):
         txt += self.value[-1]
         editor.setText(txt)
     def setData(self, data, value):
-        self.value = value
-        self.obj.set_value(value)
+        self.obj.value = value
 
 class TreeSpinBoxColumn(TreeColumn):
     def __init__(self, obj):
         self.obj = obj
         try:
-            self.value = int(obj.json['value'])
+            self.value = int(obj.value)
         except:
             self.value = 0
 
@@ -513,15 +600,13 @@ class TreeSpinBoxColumn(TreeColumn):
     def setModelData(self, editor, model, index):
         #model.setData(index, editor.value())
         value = editor.value()
-        self.value = value
-        self.obj.set_value(value)
+        self.obj.value = value
 
     def setEditorData(self, editor, index):
         editor.setValue(self.value)
     def setData(self, data, value):
         value = int(value)
-        self.value = value
-        self.obj.set_value(value)
+        self.obj.value = value
 
     def createEditor(self, parent, option, index):
         #TODO Cleanup this spinbox by subclassing it and extending textFromValue and valueFromText.
@@ -530,7 +615,7 @@ class TreeSpinBoxColumn(TreeColumn):
         #TODO Don't show a bazillion zeros to obtain full precision, thats just silly.
         #TODO Do the same thing for integers.
         
-        spinbox =  PyQt4.QtGui .QSpinBox(parent)
+        spinbox =  python_qt_binding.QtGui .QSpinBox(parent)
         spinbox.setRange(self.min, self.max)
         spinbox.setValue(int(self.value))
         spinbox.setSingleStep(1)
@@ -540,27 +625,24 @@ class TreeSpinBoxColumn(TreeColumn):
 class TreeSpinBoxDoubleColumn(TreeColumn):
     def __init__(self, obj):
         self.obj = obj
-        value = self.obj.json['value']
+        value = self.obj.value
 
         TreeColumn.__init__(self, value)
         import sys
         self.min = -sys.float_info.max
-        self.max = sys.float_info.max
+        self.max =  sys.float_info.max
         self.value = value
         self.decimals = sys.float_info.max_10_exp + 15
         self.flags |= Qt.ItemIsEditable
     def setModelData(self, editor, model, index):
         #model.setData(index, editor.value())
         value = editor.value()
-        self.value = value
-        self.obj.set_value(value)
+        self.obj.value = value
 
     def setEditorData(self, editor, index):
         editor.setValue(self.value)
     def setData(self, data, value):
-        value = value
-        self.value = value
-        self.obj.set_value(value)
+        self.obj.value = value
 
     def createEditor(self, parent, option, index):
         #TODO Cleanup this spinbox by subclassing it and extending textFromValue and valueFromText.
@@ -569,7 +651,7 @@ class TreeSpinBoxDoubleColumn(TreeColumn):
         #TODO Don't show a bazillion zeros to obtain full precision, thats just silly.
         #TODO Do the same thing for integers.
         
-        spinbox =  PyQt4.QtGui .QDoubleSpinBox(parent)
+        spinbox =  python_qt_binding.QtGui .QDoubleSpinBox(parent)
         spinbox.setRange(self.min, self.max)
         spinbox.setValue(self.value)
         spinbox.setDecimals(self.decimals)
@@ -584,16 +666,16 @@ class TreeSpinBoxDoubleColumn(TreeColumn):
 # Pick Files
 # Pick Directories
 # List selected files/directories in list
-class FilePicker(PyQt4.QtGui.QWidget):
+class FilePicker(python_qt_binding.QtGui.QWidget):
     def __init__(self, parent, obj):
         self.obj = obj
-        value = self.obj.json['value']
+        value = self.obj.value
 
         self.value = value
         self.is_in = False
-        PyQt4.QtGui.QWidget.__init__(self, parent)
+        python_qt_binding.QtGui.QWidget.__init__(self, parent)
         
-        self.line_edit = PyQt4.QtGui.QLineEdit(self)
+        self.line_edit = python_qt_binding.QtGui.QLineEdit(self)
         #self.line_edit.setReadOnly(True)
         line = ''
         if type(value) is list:
@@ -606,13 +688,13 @@ class FilePicker(PyQt4.QtGui.QWidget):
         self.line_edit.setText(line)
         self.line_edit.textChanged.connect(self.textChanged)
         self.line_edit.returnPressed.connect(self.returnPressed)
-        self.tool_button = PyQt4.QtGui.QToolButton(self)
+        self.tool_button = python_qt_binding.QtGui.QToolButton(self)
         self.tool_button.setText("...")
         
         #self.connect(self.tool_button, SIGNAL("clicked()"), self.button_clicked)
         #self.connect(self.line_edit, SIGNAL("clicked()"), self.button_clicked) 
         self.tool_button.clicked.connect(self.button_clicked)
-        self.layout = PyQt4.QtGui.QHBoxLayout(self)
+        self.layout = python_qt_binding.QtGui.QHBoxLayout(self)
         
         self.layout.addWidget(self.line_edit)
         self.layout.addWidget(self.tool_button)
@@ -620,11 +702,11 @@ class FilePicker(PyQt4.QtGui.QWidget):
         self.layout.setSpacing(0)
         self.layout.setMargin(0)
         self.value = value
-        self.dialog = PyQt4.QtGui.QFileDialog (self, "File Picker", ".", "all files (*)" )
+        self.dialog = python_qt_binding.QtGui.QFileDialog (self, "File Picker", ".", "all files (*)" )
         
         self.options = None
-        self.fileMode = PyQt4.QtGui.QFileDialog.AnyFile
-        self.acceptMode = PyQt4.QtGui.QFileDialog.AcceptOpen
+        self.fileMode = python_qt_binding.QtGui.QFileDialog.AnyFile
+        self.acceptMode = python_qt_binding.QtGui.QFileDialog.AcceptOpen
         
         self.launched = False
         self.done_picking = False
@@ -644,30 +726,30 @@ class FilePicker(PyQt4.QtGui.QWidget):
         self.launched = True
         
         #Populate the dialog
-        if self.fileMode &  PyQt4.QtGui.QFileDialog.Directory:
+        if self.fileMode &  python_qt_binding.QtGui.QFileDialog.Directory:
             self.dialog.setDirectory(self.value)
 
-        elif self.fileMode & PyQt4.QtGui.QFileDialog.ExistingFiles:
+        elif self.fileMode & python_qt_binding.QtGui.QFileDialog.ExistingFiles:
             self.value = []
             for file in self.dialog.selectedFiles():
                 self.value.append(str(file))
-        elif (self.fileMode == PyQt4.QtGui.QFileDialog.ExistingFile)  or (self.fileMode == PyQt4.QtGui.QFileDialog.AnyFile):
+        elif (self.fileMode == python_qt_binding.QtGui.QFileDialog.ExistingFile)  or (self.fileMode == python_qt_binding.QtGui.QFileDialog.AnyFile):
             self.dialog.selectFile(self.value)
         #Display the dialg
         if (self.dialog.exec_()):
-            if self.fileMode &  PyQt4.QtGui.QFileDialog.Directory:
+            if self.fileMode &  python_qt_binding.QtGui.QFileDialog.Directory:
                 self.value = str(self.dialog.directory().path())
-            elif self.fileMode & PyQt4.QtGui.QFileDialog.ExistingFiles:
+            elif self.fileMode & python_qt_binding.QtGui.QFileDialog.ExistingFiles:
                 self.value = []
                 for file in self.dialog.selectedFiles():
                     self.value.append(str(file))
-            elif (self.fileMode == PyQt4.QtGui.QFileDialog.ExistingFile)  or (self.fileMode == PyQt4.QtGui.QFileDialog.AnyFile):
+            elif (self.fileMode == python_qt_binding.QtGui.QFileDialog.ExistingFile)  or (self.fileMode == python_qt_binding.QtGui.QFileDialog.AnyFile):
                 self.value = self.dialog.selectedFiles()
                 self.value = str(self.value[0]) #There is only 1 file name...
                 
             self.emit(SIGNAL("valueChanged"))
             self.emit(SIGNAL("editingFinished"))
-        #self.filelist = [PyQt4.QtGui.QFileDialog.getOpenFileName(self,"", ".")]
+        #self.filelist = [python_qt_binding.QtGui.QFileDialog.getOpenFileName(self,"", ".")]
         #self.value= self.filelist[0]
         self.set_files(self.value)
         self.done_picking = True
@@ -694,13 +776,13 @@ class FilePicker(PyQt4.QtGui.QWidget):
 class TreeDirectoryPickerColumn(TreeColumn):
     def __init__(self, obj):
         self.obj = obj
-        value = self.obj.json['value']
+        value = self.obj.value
 
         TreeColumn.__init__(self, value)
         self.flags |= Qt.ItemIsEditable
         self.filelist = value
-        self.options = PyQt4.QtGui.QFileDialog.ShowDirsOnly
-        self.fileMode = PyQt4.QtGui.QFileDialog.Directory
+        self.options = python_qt_binding.QtGui.QFileDialog.ShowDirsOnly
+        self.fileMode = python_qt_binding.QtGui.QFileDialog.Directory
     def setModelData(self, editor, model, index):
         self.value = editor.value
         self.obj.set_value(self.value)
@@ -720,7 +802,7 @@ class TreeDirectoryPickerColumn(TreeColumn):
 class TreeFilePickerColumn(TreeColumn):
     def __init__(self, obj):
         self.obj = obj
-        value = self.obj.json['value']
+        value = self.obj.value
 
         TreeColumn.__init__(self, value)
         self.flags |= Qt.ItemIsEditable
@@ -744,8 +826,8 @@ class TreeBoolColumn(TreeColumn):
         self.obj = obj
 
         
-        TreeColumn.__init__(self, obj.json['value'])
-        self.json = obj.json
+        TreeColumn.__init__(self, obj.value)
+
         self.flags |= Qt.ItemIsEditable
         self.type = str
         self.options = ['True', 'False']
@@ -755,13 +837,13 @@ class TreeBoolColumn(TreeColumn):
         col = item.columns[col]
         
         
-        menu = PyQt4.QtGui.QMenu()
+        menu = python_qt_binding.QtGui.QMenu()
         i = 0
         selected = 0
         for value in self.options:
             action = QAction(value, menu)
             menu.addAction(action)
-            if(str(item.json['value']) == value):
+            if(str(item.value) == value):
                 selected = i
                 menu.setActiveAction(action)
             i+=1
@@ -793,8 +875,8 @@ class TreeComboBoxColumn(TreeColumn):
         self.obj = obj
 
         
-        TreeColumn.__init__(self, obj.json['value'])
-        self.json = obj.json
+        TreeColumn.__init__(self, obj.value)
+
         self.flags |= Qt.ItemIsEditable
         self.type = str
         
@@ -805,13 +887,13 @@ class TreeComboBoxColumn(TreeColumn):
         col = item.columns[col]
         
         
-        menu = PyQt4.QtGui.QMenu()
+        menu = python_qt_binding.QtGui.QMenu()
         i = 0
         selected = 0
         for value in self.options:
             action = QAction(value, menu)
             menu.addAction(action)
-            if(str(item.json['value']) == value):
+            if(str(item.value) == value):
                 selected = i
                 menu.setActiveAction(action)
             i+=1
@@ -858,8 +940,9 @@ class TreeModel(QAbstractItemModel):
         return items[section]
     def clear(self):
         self.beginResetModel()
-        self.top = Config_Base(None)
-        self.top.updateJSON({'name':'Master Parent'})
+        self.top = Config_Base(parent=None)
+        self.top.name = 'Master Parent'
+
         self.endResetModel()
     def moveRows(self,  sourceParent,  sourceFirst,  sourceLast, destinationParent, destinationChild ):
         count = sourceLast - sourceFirst
@@ -919,7 +1002,7 @@ class TreeModel(QAbstractItemModel):
             parent = QModelIndex()
         else:
             row = self.rowCount(parent)
-            if parent_index.json['gui_type']  != 'Group':
+            if not isinstance(parent_index, Config_Group):
                 row = parent.row()
                 parent = parent.parent()
             parent_dest = self.move_index.parent()
@@ -1269,12 +1352,12 @@ class TreeModel(QAbstractItemModel):
 
 if __name__ == "__main__":
     from modeltest import ModelTest
-    import PyQt4.QtCore
+    import python_qt_binding.QtCore
     
     tree_model = TreeModel(None)
-    blah = Config_Base(  tree_model.top)
-    blah2 = Config_Base(blah)
-    blah2.columns.append(TreeColumn(PyQt4.QtCore.QString("Test"))) #Add some stuff to this thing.
+    blah = Config_Base(parent=tree_model.top)
+    blah2 = Config_Base(parent=blah)
+    blah2.columns.append(TreeColumn(python_qt_binding.QtCore.QString("Test"))) #Add some stuff to this thing.
     blah2.columns.append(TreeSpinBoxColumn(blah2)) #Add more stuff to this thing.
     blah2.columns[2].flags |=  Qt.ItemIsEditable 
     blah2.checkable = True
